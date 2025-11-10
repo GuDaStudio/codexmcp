@@ -165,7 +165,7 @@ async def codex(
         success = False
         err_message = "Failed to get `SESSION_ID` from the codex session. \n\n" + err_message
         
-    if len(agent_messages) == 0:
+    if success and len(agent_messages) == 0:
         success = False
         err_message = "Failed to get `agent_messages` from the codex session. \n\nYou can try to set `return_all_messages` to `True` to get the full reasoning information. \n\n"
 
