@@ -133,7 +133,7 @@ claude mcp list
   - SESSION_ID (UUID | null): 用于继续之前的会话以与codex进行多轮交互，默认为 None（开启新会话）
   - skip_git_repo_check (boolean): 是否允许在非 Git 仓库中运行，默认 False
   - return_all_messages (boolean): 是否返回所有消息（包括推理、工具调用等），默认 False
-  - profile (string | null): 从 codex config.toml 中指定要使用的配置 profile 名称。如果项目根目录存在 .codex-profile 文件（文件内容为 profile 名称，如 `ais_codexmcp`），在调用 MCP 工具时应将该文件中的内容作为此参数传递。默认为 None（使用 codex 默认配置）
+  - profile (string | null): 从 codex config.toml 中指定要使用的配置 profile 名称。[重要]如果项目根目录存在 .codex-profile 文件（文件内容为 profile 名称，如 `ais_codexmcp`），在调用 MCP 工具时应将该文件中的内容作为此参数传递。默认为 None（使用 codex 默认配置）
 
   返回值：
   {
@@ -161,6 +161,7 @@ claude mcp list
   4. 调用规范
 
   **必须遵守**：
+  - **【重要】每次使用 mcp__codex__codex 工具前，先用 Read 工具读取项目根目录的 `.codex-profile` 文件。如果文件存在，将其内容作为 profile 参数传递；如果不存在，profile 参数传递 None 或省略。**
   - 每次调用 codex 工具时，必须保存返回的 SESSION_ID，以便后续继续对话
   - cd 参数必须指向存在的目录，否则工具会静默失败
   - 严禁codex对代码进行实际修改，使用 sandbox="read-only" 以避免意外，并要求codex仅给出unified diff patch即可
@@ -196,7 +197,7 @@ claude mcp list
 | `SESSION_ID` | `UUID \| None` | ❌ | `None` | 会话 ID（None 则开启新会话） |
 | `skip_git_repo_check` | `bool` | ❌ | `False` | 是否允许在非 Git 仓库运行 |
 | `return_all_messages` | `bool` | ❌ | `False` | 是否返回完整推理信息 |
-| `profile` | `str \| None` | ❌ | `None` | 配置 profile 名称（可从项目根目录 .codex-profile 文件读取） |
+| `profile` | `str \| None` | ❌ | `None` | 配置 profile 名称（从项目根目录 .codex-profile 文件读取） |
 
 </details>
 

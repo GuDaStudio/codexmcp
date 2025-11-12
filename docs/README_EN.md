@@ -111,7 +111,7 @@ You **must execute** the following steps:
   - SESSION_ID (UUID | null): For continuing previous sessions to enable multi-turn interactions with Codex, defaults to None (start new session)
   - skip_git_repo_check (boolean): Whether to allow running in non-Git repositories, defaults to False
   - return_all_messages (boolean): Whether to return all messages (including reasoning, tool calls, etc.), defaults to False
-  - profile (string | null): Configuration profile name from codex config.toml to use. If a .codex-profile file exists in the project root directory (containing the profile name, e.g., `ais_codexmcp`), you should pass the file's content as this parameter when calling the MCP tool. Defaults to None (use codex default configuration)
+  - profile (string | null): Configuration profile name from codex config.toml to use. [Important] If a .codex-profile file exists in the project root directory (containing the profile name, e.g., `ais_codexmcp`), you should pass the file's content as this parameter when calling the MCP tool. Defaults to None (use codex default configuration)
 
   Return value:
   {
@@ -139,6 +139,7 @@ You **must execute** the following steps:
   4. Invocation Standards
 
   **Must comply**:
+  - **【Important】Before using the mcp__codex__codex tool, first use the Read tool to read the `.codex-profile` file in the project root directory. If the file exists, pass its content as the profile parameter; if not, pass None or omit the parameter.**
   - Every time you call the Codex tool, you must save the returned SESSION_ID for subsequent conversations
   - The cd parameter must point to an existing directory, otherwise the tool will fail silently
   - Strictly prohibit Codex from making actual code modifications; use sandbox="read-only" to prevent accidents, and require Codex to provide only unified diff patches
@@ -174,7 +175,7 @@ You **must execute** the following steps:
 | `SESSION_ID` | `UUID \| None` | ❌ | `None` | Session ID (None starts new session) |
 | `skip_git_repo_check` | `bool` | ❌ | `False` | Whether to allow running in non-Git repositories |
 | `return_all_messages` | `bool` | ❌ | `False` | Whether to return complete reasoning information |
-| `profile` | `str \| None` | ❌ | `None` | Configuration profile name (can be read from .codex-profile file at project root) |
+| `profile` | `str \| None` | ❌ | `None` | Configuration profile name (read from .codex-profile file at project root) |
 
 </details>
 
