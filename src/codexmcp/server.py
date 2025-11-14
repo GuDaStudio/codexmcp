@@ -157,7 +157,7 @@ async def codex(
     model: Annotated[
         Optional[str],
         Field(
-            description="The model to use for the codex session. Default user configuration is applied; this parameter remains inactive unless explicitly specified by the user.",
+            description="The model to use for the codex session. This parameter is strictly prohibited unless explicitly specified by the user.",
         ),
     ] = None,
     yolo: Annotated[
@@ -168,7 +168,7 @@ async def codex(
     ] = False,
     profile: Annotated[
         Optional[str],
-        "Configuration profile name to load from `~/.codex/config.toml`. Default user configuration is applied; this parameter remains inactive unless explicitly specified by the user.",
+        "Configuration profile name to load from `~/.codex/config.toml`. This parameter is strictly prohibited unless explicitly specified by the user.",
     ] = None,
 ) -> Dict[str, Any]:
     """Execute a Codex CLI session and return the results."""
