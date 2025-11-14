@@ -217,11 +217,11 @@ async def codex(
                 thread_id = line_dict.get("thread_id")
             if "fail" in item_type:
                 success = False
-                err_message = "codex error: " + item.get("error", {}).get("message", "")
+                err_message = "codex error: " + line_dict.get("error", {}).get("message", "")
                 break
             if "error" in item_type:
                 success = False
-                err_message = "codex error: " + item.get("message", "")   
+                err_message = "codex error: " + line_dict.get("message", "")   
         except json.JSONDecodeError as error:
             # Improved error handling: include problematic line
             err_message = line
