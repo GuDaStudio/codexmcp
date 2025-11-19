@@ -216,11 +216,12 @@ async def codex(
             if line_dict.get("thread_id") is not None:
                 thread_id = line_dict.get("thread_id")
             if "fail" in line_dict.get("type", ""):
-                success = False
+                success = False if len(agent_messages) == 0 else success
                 err_message = "codex error: " + line_dict.get("error", {}).get("message", "")
-                break
+                if "reconnecting" not in err_message.lower():
+                    break
             if "error" in line_dict.get("type", ""):
-                success = False
+                success = False if len(agent_messages) == 0 else success
                 err_message = "codex error: " + line_dict.get("message", "")   
         except json.JSONDecodeError as error:
             # Improved error handling: include problematic line
