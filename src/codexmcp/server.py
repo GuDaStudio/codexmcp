@@ -221,11 +221,11 @@ async def codex(
             if "error" in line_dict.get("type", ""):
                 success = False if len(agent_messages) == 0 else success
                 err_message = "codex error: " + line_dict.get("message", "")   
-        except json.JSONDecodeError as error:
-            # Improved error handling: include problematic line
-            err_message = line
-            success = False
-            break
+        except json.JSONDecodeError:
+            # 如果读到的不是 JSON（比如 Rust 的日志），就打印到 stderr 并跳过，不要中断！
+            import sys
+            print(f"Ignored non-JSON line: {line}", file=sys.stderr)
+            continue
         except Exception as error:
             err_message = f"Unexpected error: {error}. Line: {line!r}"
             success = False
