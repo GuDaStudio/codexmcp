@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import queue
+import re
 import subprocess
 import threading
 import uuid
@@ -219,13 +220,19 @@ async def codex(
                 success = False if len(agent_messages) == 0 else success
                 err_message = "codex error: " + line_dict.get("error", {}).get("message", "")
             if "error" in line_dict.get("type", ""):
-                success = False if len(agent_messages) == 0 else success
-                err_message = "codex error: " + line_dict.get("message", "")   
+                error_msg = line_dict.get("message", "")
+                import re 
+                is_reconnecting = bool(re.match(r'^Reconnecting\.\.\.\s+\d+/\d+$', error_msg))
+                
+                if not is_reconnecting:
+                    success = False if len(agent_messages) == 0 else success
+                    err_message = "codex error: " + error_msg
+                    
         except json.JSONDecodeError:
-            # 如果读到的不是 JSON（比如 Rust 的日志），就打印到 stderr 并跳过，不要中断！
             import sys
             print(f"Ignored non-JSON line: {line}", file=sys.stderr)
             continue
+            
         except Exception as error:
             err_message = f"Unexpected error: {error}. Line: {line!r}"
             success = False

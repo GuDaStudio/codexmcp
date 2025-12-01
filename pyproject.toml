@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "codexmcp"
-version = "0.1.0"
+version = "0.7.4"
 description = "FastMCP server wrapping the Codex CLI."
 readme = "README.md"
 requires-python = ">=3.12"
