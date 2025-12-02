@@ -137,10 +137,9 @@ async def codex(
         ),
     ] = "read-only",
     SESSION_ID: Annotated[
-        Optional[uuid.UUID],
-        BeforeValidator(_empty_str_to_none),
+        str,
         "Resume the specified session of the codex. Defaults to `None`, start a new session.",
-    ] = None,
+    ] = "",
     skip_git_repo_check: Annotated[
         bool,
         "Allow codex running outside a Git repository (useful for one-off directories).",
@@ -150,39 +149,39 @@ async def codex(
         "Return all messages (e.g. reasoning, tool calls, etc.) from the codex session. Set to `False` by default, only the agent's final reply message is returned.",
     ] = False,
     image: Annotated[
-        Optional[List[Path]],
+        List[Path],
         Field(
             description="Attach one or more image files to the initial prompt. Separate multiple paths with commas or repeat the flag.",
         ),
-    ] = None,
+    ] = [],
     model: Annotated[
-        Optional[str],
+        str,
         Field(
             description="The model to use for the codex session. This parameter is strictly prohibited unless explicitly specified by the user.",
         ),
-    ] = None,
+    ] = "",
     yolo: Annotated[
-        Optional[bool],
+        bool,
         Field(
             description="Run every command without approvals or sandboxing. Only use when `sandbox` couldn't be applied.",
         ),
     ] = False,
     profile: Annotated[
-        Optional[str],
+        str,
         "Configuration profile name to load from `~/.codex/config.toml`. This parameter is strictly prohibited unless explicitly specified by the user.",
-    ] = None,
+    ] = "",
 ) -> Dict[str, Any]:
     """Execute a Codex CLI session and return the results."""
     # Build command as list to avoid injection
     cmd = ["codex", "exec", "--sandbox", sandbox, "--cd", str(cd), "--json"]
     
-    if image is not None:
+    if len(image):
         cmd.extend(["--image", ",".join(image)])
         
-    if model is not None:
+    if model:
         cmd.extend(["--model", model])
         
-    if profile is not None:
+    if profile:
         cmd.extend(["--profile", profile])
         
     if yolo:
@@ -191,7 +190,7 @@ async def codex(
     if skip_git_repo_check:
         cmd.append("--skip-git-repo-check")
 
-    if SESSION_ID is not None:
+    if SESSION_ID:
         cmd.extend(["resume", str(SESSION_ID)])
         
     if os.name == "nt":
@@ -218,7 +217,7 @@ async def codex(
                 thread_id = line_dict.get("thread_id")
             if "fail" in line_dict.get("type", ""):
                 success = False if len(agent_messages) == 0 else success
-                err_message = "codex error: " + line_dict.get("error", {}).get("message", "")
+                err_message += "\n\n[codex error] " + line_dict.get("error", {}).get("message", "")
             if "error" in line_dict.get("type", ""):
                 error_msg = line_dict.get("message", "")
                 import re 
@@ -226,15 +225,16 @@ async def codex(
                 
                 if not is_reconnecting:
                     success = False if len(agent_messages) == 0 else success
-                    err_message = "codex error: " + error_msg
+                    err_message += "\n\n[codex error] " + error_msg
                     
         except json.JSONDecodeError:
-            import sys
-            print(f"Ignored non-JSON line: {line}", file=sys.stderr)
+            # import sys
+            # print(f"Ignored non-JSON line: {line}", file=sys.stderr)
+            err_message += "\n\n[json decode error] " + line
             continue
             
         except Exception as error:
-            err_message = f"Unexpected error: {error}. Line: {line!r}"
+            err_message += "\n\n[unexpected error] " + f"Unexpected error: {error}. Line: {line!r}"
             success = False
             break
 
@@ -244,7 +244,7 @@ async def codex(
         
     if len(agent_messages) == 0:
         success = False
-        err_message = "Failed to get `agent_messages` from the codex session. \n\n You can try to set `return_all_messages` to `True` to get the full reasoning information. \n\n " + err_message
+        err_message = "Failed to get `agent_messages` from the codex session. \n\n You can try to set `return_all_messages` to `True` to get the full reasoning information. " + err_message
 
     if success:
         result: Dict[str, Any] = {
@@ -253,10 +253,12 @@ async def codex(
             "agent_messages": agent_messages,
             # "PROMPT": PROMPT,
         }
-        if return_all_messages:
-            result["all_messages"] = all_messages
+        
     else:
         result = {"success": False, "error": err_message}
+        
+    if return_all_messages:
+            result["all_messages"] = all_messages
 
     return result
 
