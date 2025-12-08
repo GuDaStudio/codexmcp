@@ -62,26 +62,52 @@ def run_shell_command(cmd: list[str]) -> Generator[str, None, None]:
         """Read process output in a separate thread."""
         if process.stdout:
             for line in iter(process.stdout.readline, ""):
-                output_queue.put(line.strip())
+                stripped = line.strip()
+                output_queue.put(stripped)
+                # 检测 turn.completed 后终止进程
+                if '"type":"turn.completed"' in stripped:
+                    try:
+                        import time
+                        time.sleep(0.5)  # 短暂等待确保输出完整
+                        process.terminate()
+                    except:
+                        pass
+                    break
             process.stdout.close()
+        # 标记读取完成
+        output_queue.put(None)
 
     thread = threading.Thread(target=read_output)
-    thread.daemon = True
+    # 修复：移除 daemon=True，确保线程能完整读取所有输出
     thread.start()
 
     # Yield lines while process is running
-    while process.poll() is None:
+    while True:
         try:
-            yield output_queue.get(timeout=0.1)
+            line = output_queue.get(timeout=0.5)
+            if line is None:  # 读取完成标记
+                break
+            yield line
         except queue.Empty:
+            # 检查进程是否已结束且线程已完成
+            if process.poll() is not None and not thread.is_alive():
+                break
             continue
 
-    process.wait()
+    # 等待进程和线程完全结束
+    try:
+        process.wait(timeout=5)
+    except:
+        process.kill()
+        process.wait()
+    thread.join(timeout=5)
 
-    # Drain remaining output from queue
+    # 最后再次清空队列，确保没有遗漏
     while not output_queue.empty():
         try:
-            yield output_queue.get_nowait()
+            line = output_queue.get_nowait()
+            if line is not None:
+                yield line
         except queue.Empty:
             break
 def windows_escape(prompt):
