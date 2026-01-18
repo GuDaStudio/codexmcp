@@ -180,6 +180,16 @@ async def codex(
             description="The model to use for the codex session. This parameter is strictly prohibited unless explicitly specified by the user.",
         ),
     ] = "",
+    reasoning_effort: Annotated[
+        Optional[Literal["low", "medium", "high", "xhigh"]],
+        Field(
+            description=(
+                "Override Codex config `model_reasoning_effort` (thinking budget). "
+                "Allowed values: low, medium, high, xhigh. "
+                "If omitted, uses the config/profile default."
+            ),
+        ),
+    ] = None,
     yolo: Annotated[
         bool,
         Field(
@@ -203,7 +213,10 @@ async def codex(
         
     if profile:
         cmd.extend(["--profile", profile])
-        
+
+    if reasoning_effort is not None:
+        cmd.extend(["--config", f'model_reasoning_effort="{reasoning_effort}"'])
+
     if yolo:
         cmd.append("--yolo")
     
