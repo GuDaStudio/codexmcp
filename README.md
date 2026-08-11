@@ -34,6 +34,7 @@
 | 推理详情追踪 | × | √ |
 | 并行任务支持 | ×  | √  |
 | 错误处理 | ×  | √  |
+| 实时过程监控（Web 面板） | ×  | √  |
 
 
 ---
@@ -188,7 +189,44 @@ claude mcp list
 
 ---
 
-## 三、工具说明
+## 三、实时监控面板
+
+Claude Code 在调用 MCP 工具期间只会显示一个 `Calling codex...`，看不到 Codex 内部的任何处理过程（这是 Claude Code 客户端的限制：MCP 协议不支持工具结果流式返回，而进度/日志通知目前不会被渲染）。
+
+CodexMCP 因此把每次调用的完整事件流实时落盘，并附带一个独立的 Web 面板，让你随时看到「现在跑到哪一步了」。
+
+![监控面板](images/monitor.png)
+
+### 启动
+
+```bash
+uvx --from git+https://github.com/GuDaStudio/codexmcp codexmcp-monitor
+```
+
+浏览器会自动打开 <http://127.0.0.1:8765>。常用参数：
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `--port` | `8765` | 监听端口 |
+| `--host` | `127.0.0.1` | 监听地址（默认仅本机可访问） |
+| `--no-open` | - | 启动时不自动打开浏览器 |
+
+### 面板能看到什么
+
+- **左侧**：所有 Codex 会话，进行中的自动置顶并高亮，显示已运行时长与事件数；支持按 prompt / 目录搜索、只看进行中
+- **右侧**：所选会话的完整过程，实时增量刷新——Codex 的回复、推理、执行的每一条 shell 命令及其输出与退出码、文件改动、token 用量
+- 点击 `SESSION_ID` 可直接复制，用于后续多轮对话；页面地址栏带 `#run_id`，可收藏或分享某次具体调用
+
+### 说明
+
+- 面板是**独立进程**，只读取记录文件，开不开都不影响正在运行的 Codex 任务
+- 记录写在 `~/.codexmcp/runs/`（可用环境变量 `CODEXMCP_HOME` 改根目录），每次调用两个文件：`*.meta.json`（状态与参数）和 `*.jsonl`（事件流）
+- 自动保留最近 500 次调用，更早的会在服务启动时清理
+- 记录失败（如磁盘满、无权限）只会静默关闭当次录制，绝不影响 `codex` 工具本身的执行与返回
+
+---
+
+## 四、工具说明
 
 <details>
 <summary>点击查看codex工具参数说明</summary>
@@ -233,7 +271,7 @@ claude mcp list
 
 ---
 
-## 四、FAQ
+## 五、FAQ
 
 <details>
 <summary>Q1: 是否需要额外付费？</summary>
@@ -246,6 +284,15 @@ claude mcp list
 <summary>Q2: 并行调用会冲突吗？</summary>
 
 不会。每个调用使用独立的 `SESSION_ID`，完全隔离。
+
+</details>
+
+<details>
+<summary>Q3: 为什么 Claude Code 里看不到 Codex 的处理过程？</summary>
+
+这是 Claude Code 客户端侧的限制，不是 CodexMCP 能绕过的：MCP 协议要求工具一次性返回完整结果，不支持流式返回；协议里的进度通知（`notifications/progress`）与日志通知（`notifications/message`）虽然服务端可以发送，但 Claude Code 目前都不会渲染出来。所以工具执行期间界面上只有一个 `Calling codex...`。
+
+请改用[实时监控面板](#三实时监控面板)：`codexmcp-monitor` 会以独立网页实时展示每次调用的完整处理过程。
 
 </details>
 

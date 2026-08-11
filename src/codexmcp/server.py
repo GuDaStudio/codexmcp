@@ -16,6 +16,8 @@ from mcp.server.fastmcp import FastMCP
 from pydantic import BeforeValidator, Field
 import shutil
 
+from codexmcp.recorder import RunRecorder
+
 mcp = FastMCP("Codex MCP Server-from guda.studio")
 
 
@@ -213,11 +215,25 @@ async def codex(
     if SESSION_ID:
         cmd.extend(["resume", str(SESSION_ID)])
         
+    original_prompt = PROMPT
     if os.name == "nt":
         PROMPT = windows_escape(PROMPT)
-    else:
-        PROMPT = PROMPT
     cmd += ['--', PROMPT]
+
+    recorder = RunRecorder.start(
+        {
+            "prompt": original_prompt,
+            "cd": str(cd),
+            "sandbox": sandbox,
+            "model": model or None,
+            "profile": profile or None,
+            "yolo": yolo,
+            "skip_git_repo_check": skip_git_repo_check,
+            "images": [str(path) for path in image],
+            "resume_session_id": SESSION_ID or None,
+            "command": cmd,
+        }
+    )
 
     all_messages: list[Dict[str, Any]] = []
     agent_messages = ""
@@ -225,46 +241,55 @@ async def codex(
     err_message = ""
     thread_id: Optional[str] = None
 
-    for line in run_shell_command(cmd):
-        try:
-            line_dict = json.loads(line.strip())
-            all_messages.append(line_dict)
-            item = line_dict.get("item", {})
-            item_type = item.get("type", "")
-            if item_type == "agent_message":
-                agent_messages = agent_messages + item.get("text", "")
-            if line_dict.get("thread_id") is not None:
-                thread_id = line_dict.get("thread_id")
-            if "fail" in line_dict.get("type", ""):
-                success = False if len(agent_messages) == 0 else success
-                err_message += "\n\n[codex error] " + line_dict.get("error", {}).get("message", "")
-            if "error" in line_dict.get("type", ""):
-                error_msg = line_dict.get("message", "")
-                import re
-                is_reconnecting = bool(re.match(r'^Reconnecting\.\.\.\s+\d+/\d+', error_msg))
-                
-                if not is_reconnecting:
+    try:
+        for line in run_shell_command(cmd):
+            try:
+                line_dict = json.loads(line.strip())
+                recorder.record(line, line_dict)
+                all_messages.append(line_dict)
+                item = line_dict.get("item", {})
+                item_type = item.get("type", "")
+                if item_type == "agent_message":
+                    agent_messages = agent_messages + item.get("text", "")
+                if line_dict.get("thread_id") is not None:
+                    thread_id = line_dict.get("thread_id")
+                    recorder.set_session_id(thread_id)
+                if "fail" in line_dict.get("type", ""):
                     success = False if len(agent_messages) == 0 else success
-                    err_message += "\n\n[codex error] " + error_msg
-                    
-        except json.JSONDecodeError:
-            # import sys
-            # print(f"Ignored non-JSON line: {line}", file=sys.stderr)
-            err_message += "\n\n[json decode error] " + line
-            continue
-            
-        except Exception as error:
-            err_message += "\n\n[unexpected error] " + f"Unexpected error: {error}. Line: {line!r}"
-            success = False
-            break
+                    err_message += "\n\n[codex error] " + line_dict.get("error", {}).get("message", "")
+                if "error" in line_dict.get("type", ""):
+                    error_msg = line_dict.get("message", "")
+                    import re
+                    is_reconnecting = bool(re.match(r'^Reconnecting\.\.\.\s+\d+/\d+', error_msg))
 
-    if thread_id is None:
-        success = False
-        err_message = "Failed to get `SESSION_ID` from the codex session. \n\n" + err_message
-        
-    if len(agent_messages) == 0:
-        success = False
-        err_message = "Failed to get `agent_messages` from the codex session. \n\n You can try to set `return_all_messages` to `True` to get the full reasoning information. " + err_message
+                    if not is_reconnecting:
+                        success = False if len(agent_messages) == 0 else success
+                        err_message += "\n\n[codex error] " + error_msg
+
+            except json.JSONDecodeError:
+                recorder.record(line)
+                err_message += "\n\n[json decode error] " + line
+                continue
+
+            except Exception as error:
+                err_message += "\n\n[unexpected error] " + f"Unexpected error: {error}. Line: {line!r}"
+                success = False
+                break
+
+        if thread_id is None:
+            success = False
+            err_message = "Failed to get `SESSION_ID` from the codex session. \n\n" + err_message
+
+        if len(agent_messages) == 0:
+            success = False
+            err_message = "Failed to get `agent_messages` from the codex session. \n\n You can try to set `return_all_messages` to `True` to get the full reasoning information. " + err_message
+
+        recorder.finish(success, err_message, agent_messages)
+
+    except BaseException as error:
+        # Covers cancellation too, so an aborted tool call is not left "running".
+        recorder.finish(False, f"[aborted] {type(error).__name__}: {error}", agent_messages)
+        raise
 
     if success:
         result: Dict[str, Any] = {
@@ -273,12 +298,12 @@ async def codex(
             "agent_messages": agent_messages,
             # "PROMPT": PROMPT,
         }
-        
+
     else:
         result = {"success": False, "error": err_message}
-        
+
     if return_all_messages:
-            result["all_messages"] = all_messages
+        result["all_messages"] = all_messages
 
     return result
 

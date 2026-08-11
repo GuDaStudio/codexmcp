@@ -123,7 +123,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "mcp", extras = ["cli"], specifier = ">=1.20.0" },
+    { name = "mcp", extras = ["cli"], specifier = ">=1.20.0,<2.0.0" },
     { name = "pydantic", specifier = ">=2.0" },
 ]
 

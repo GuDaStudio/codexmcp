@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CodexMCP Monitor</title>
+<style>
+  :root {
+    --bg: #0d0f14;
+    --panel: #141821;
+    --panel-2: #1a1f2b;
+    --border: #252c3a;
+    --text: #e4e8f1;
+    --muted: #8791a7;
+    --faint: #5c6577;
+    --run: #f5a623;
+    --ok: #3ecf8e;
+    --err: #ff6b6b;
+    --blue: #6aa9ff;
+    --mono: ui-monospace, "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.55 system-ui, "Segoe UI", "Microsoft YaHei", sans-serif;
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    overflow: hidden;
+  }
+
+  /* ---------- sidebar ---------- */
+  #sidebar { border-right: 1px solid var(--border); background: var(--panel); display: flex; flex-direction: column; min-height: 0; }
+  .side-head { padding: 14px 16px 10px; border-bottom: 1px solid var(--border); }
+  .brand { font-weight: 650; letter-spacing: .3px; display: flex; align-items: center; gap: 8px; }
+  .brand small { color: var(--faint); font-weight: 400; letter-spacing: 0; }
+  .counts { color: var(--muted); font-size: 12px; margin-top: 6px; }
+  .counts b { color: var(--run); font-weight: 600; }
+  .filters { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
+  .filters input[type=search] {
+    flex: 1; min-width: 0; background: var(--bg); border: 1px solid var(--border);
+    color: var(--text); border-radius: 6px; padding: 5px 8px; font-size: 12px;
+  }
+  .filters input[type=search]:focus { outline: none; border-color: var(--blue); }
+  .filters label { color: var(--muted); font-size: 12px; display: flex; gap: 4px; align-items: center; cursor: pointer; white-space: nowrap; }
+
+  #runs { overflow-y: auto; flex: 1; min-height: 0; }
+  .run {
+    padding: 10px 16px; border-bottom: 1px solid var(--border);
+    cursor: pointer; display: grid; grid-template-columns: 8px 1fr; gap: 10px;
+  }
+  .run:hover { background: var(--panel-2); }
+  .run.sel { background: var(--panel-2); box-shadow: inset 3px 0 0 var(--blue); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; background: var(--faint); }
+  .dot.running { background: var(--run); animation: pulse 1.4s ease-in-out infinite; }
+  .dot.completed { background: var(--ok); }
+  .dot.failed { background: var(--err); }
+  @keyframes pulse { 0%,100% { opacity: 1; box-shadow: 0 0 0 0 rgba(245,166,35,.5); } 50% { opacity: .55; box-shadow: 0 0 0 5px rgba(245,166,35,0); } }
+  .run-title { font-size: 13px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .run-meta { color: var(--faint); font-size: 11.5px; margin-top: 3px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .empty { color: var(--faint); padding: 24px 16px; font-size: 13px; text-align: center; }
+
+  /* ---------- detail ---------- */
+  #detail { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  .det-head { padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--panel); }
+  .det-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
+  .badge.running { color: var(--run); border-color: rgba(245,166,35,.4); }
+  .badge.completed { color: var(--ok); border-color: rgba(62,207,142,.4); }
+  .badge.failed { color: var(--err); border-color: rgba(255,107,107,.4); }
+  .kv { display: flex; gap: 16px; flex-wrap: wrap; color: var(--muted); font-size: 12px; margin-top: 8px; }
+  .kv span b { color: var(--text); font-weight: 500; font-family: var(--mono); }
+  .copy { cursor: pointer; border-bottom: 1px dashed var(--faint); }
+  .copy:hover { color: var(--blue); }
+  .prompt-box {
+    margin-top: 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    padding: 8px 10px; font-size: 12.5px; max-height: 96px; overflow: auto; white-space: pre-wrap;
+    word-break: break-word; color: var(--muted);
+  }
+
+  #timeline { overflow-y: auto; padding: 16px 20px 40px; flex: 1; min-height: 0; }
+  .ev { margin-bottom: 12px; }
+  .ev-head { display: flex; align-items: baseline; gap: 8px; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .ev-time { font-family: var(--mono); color: var(--faint); font-size: 11px; }
+  .tag { font-weight: 600; }
+  .tag.msg { color: var(--ok); }
+  .tag.think { color: var(--muted); }
+  .tag.cmd { color: var(--blue); }
+  .tag.file { color: #c792ea; }
+  .tag.sys { color: var(--faint); }
+  .tag.err { color: var(--err); }
+  .body { border-left: 2px solid var(--border); padding: 2px 0 2px 12px; white-space: pre-wrap; word-break: break-word; }
+  .body.msg { border-left-color: rgba(62,207,142,.45); }
+  .body.think { color: var(--muted); font-size: 13px; border-left-color: var(--border); }
+  .body.err { color: var(--err); border-left-color: rgba(255,107,107,.45); }
+  code, .code { font-family: var(--mono); font-size: 12.5px; }
+  .cmd-line { background: var(--bg); border: 1px solid var(--border); border-radius: 6px 6px 0 0; padding: 6px 10px; color: var(--blue); }
+  .cmd-out {
+    background: #090b0f; border: 1px solid var(--border); border-top: none; border-radius: 0 0 6px 6px;
+    padding: 6px 10px; max-height: 260px; overflow: auto; color: var(--muted); white-space: pre-wrap; word-break: break-word;
+  }
+  .cmd-status { font-size: 11px; color: var(--faint); margin-top: 3px; }
+  .cmd-status.bad { color: var(--err); }
+  .placeholder { color: var(--faint); text-align: center; padding: 80px 20px; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: #2b3342; border-radius: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+</style>
+</head>
+<body>
+<aside id="sidebar">
+  <div class="side-head">
+    <div class="brand">CodexMCP <small>Monitor</small></div>
+    <div class="counts" id="counts">连接中…</div>
+    <div class="filters">
+      <input type="search" id="q" placeholder="搜索 prompt / 目录" />
+      <label><input type="checkbox" id="only-running" /> 仅进行中</label>
+    </div>
+  </div>
+  <div id="runs"><div class="empty">加载中…</div></div>
+</aside>
+
+<main id="detail">
+  <div id="det-head"></div>
+  <div id="timeline"><div class="placeholder">从左侧选择一个会话查看处理过程</div></div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+let runs = [];
+let selected = location.hash.slice(1) || null;   // deep link, e.g. #20260811-174101-ab12cd34
+let offset = 0;
+let nodes = new Map();      // timeline key -> {el, sig}
+let order = [];             // insertion order of keys
+let detailMeta = null;
+
+/* ---------- helpers ---------- */
+function ms(iso) { const t = Date.parse(iso); return Number.isNaN(t) ? null : t; }
+
+function dur(from, to) {
+  const a = ms(from), b = to ? ms(to) : Date.now();
+  if (a === null || b === null) return '';
+  const s = Math.max(0, Math.round((b - a) / 1000));
+  if (s < 60) return s + '秒';
+  const m = Math.floor(s / 60);
+  return m < 60 ? `${m}分${s % 60}秒` : `${Math.floor(m / 60)}时${m % 60}分`;
+}
+
+function ago(iso) {
+  const t = ms(iso);
+  if (t === null) return '';
+  const s = Math.round((Date.now() - t) / 1000);
+  if (s < 10) return '刚刚';
+  if (s < 60) return s + '秒前';
+  if (s < 3600) return Math.floor(s / 60) + '分钟前';
+  if (s < 86400) return Math.floor(s / 3600) + '小时前';
+  return Math.floor(s / 86400) + '天前';
+}
+
+function clock(iso) {
+  const t = ms(iso);
+  return t === null ? '' : new Date(t).toTimeString().slice(0, 8);
+}
+
+const baseName = (p) => String(p || '').replace(/[\\/]+$/, '').split(/[\\/]/).pop() || p || '';
+
+/* ---------- run list ---------- */
+async function pollRuns() {
+  try {
+    const data = await (await fetch('/api/runs')).json();
+    runs = data.runs || [];
+    renderRuns();
+  } catch {
+    $('counts').textContent = '监控服务已断开，重试中…';
+  }
+}
+
+function renderRuns() {
+  const q = $('q').value.trim().toLowerCase();
+  const onlyRunning = $('only-running').checked;
+  const running = runs.filter((r) => r.status === 'running').length;
+  $('counts').innerHTML = `<b>${running}</b> 个进行中 · 共 ${runs.length} 条记录`;
+
+  let list = runs;
+  if (onlyRunning) list = list.filter((r) => r.status === 'running');
+  if (q) list = list.filter((r) => (r.prompt || '').toLowerCase().includes(q) || (r.cd || '').toLowerCase().includes(q));
+  // Live runs first, then newest.
+  list = [...list].sort((a, b) => (a.status === 'running' ? 0 : 1) - (b.status === 'running' ? 0 : 1));
+
+  if (!selected && list.length) resetDetail(list[0].run_id);
+  // A stale deep link (pruned or mistyped run id) falls back to the newest run.
+  if (selected && runs.length && !runs.some((r) => r.run_id === selected)) resetDetail(list[0]?.run_id ?? runs[0].run_id);
+
+  if (!list.length) {
+    $('runs').innerHTML = `<div class="empty">${runs.length ? '没有匹配的会话' : '还没有记录。<br />在 Claude Code 里调用 codex 工具后会出现在这里。'}</div>`;
+    return;
+  }
+
+  $('runs').innerHTML = list.map((r) => `
+    <div class="run ${r.run_id === selected ? 'sel' : ''}" data-id="${esc(r.run_id)}">
+      <div class="dot ${esc(r.status)}"></div>
+      <div>
+        <div class="run-title">${esc((r.prompt || '(无 prompt)').slice(0, 120))}</div>
+        <div class="run-meta">
+          <span>${esc(baseName(r.cd))}</span>
+          <span>${r.status === 'running' ? '已运行 ' + dur(r.started_at) : ago(r.started_at)}</span>
+          <span>${r.event_count || 0} 事件</span>
+        </div>
+      </div>
+    </div>`).join('');
+
+  for (const el of document.querySelectorAll('.run')) {
+    el.onclick = () => select(el.dataset.id);
+  }
+}
+
+function resetDetail(id) {
+  selected = id;
+  offset = 0;
+  nodes = new Map();
+  order = [];
+  detailMeta = null;
+  $('timeline').innerHTML = '';
+  if (location.hash.slice(1) !== id) history.replaceState(null, '', '#' + id);
+  pollEvents();
+}
+
+function select(id) {
+  if (id === selected) return;
+  resetDetail(id);
+  renderRuns();
+}
+
+/* ---------- detail ---------- */
+function renderHead() {
+  const m = detailMeta;
+  if (!m) { $('det-head').innerHTML = ''; return; }
+  const sid = m.session_id
+    ? `<span>SESSION_ID <b class="copy" title="点击复制" onclick="navigator.clipboard.writeText('${esc(m.session_id)}')">${esc(m.session_id)}</b></span>`
+    : '';
+  const label = { running: '进行中', completed: '已完成', failed: '失败' }[m.status] || m.status;
+  $('det-head').innerHTML = `
+    <div class="det-head">
+      <div class="det-title">
+        <span class="badge ${esc(m.status)}">${esc(label)}</span>
+        <strong>${esc(baseName(m.cd))}</strong>
+        <span class="badge">${esc(m.sandbox || '')}</span>
+        ${m.model ? `<span class="badge">${esc(m.model)}</span>` : ''}
+        ${m.yolo ? '<span class="badge failed">yolo</span>' : ''}
+      </div>
+      <div class="kv">
+        <span>目录 <b>${esc(m.cd)}</b></span>
+        <span>耗时 <b>${dur(m.started_at, m.finished_at)}</b></span>
+        <span>事件 <b>${m.event_count || 0}</b></span>
+        ${sid}
+      </div>
+      <div class="prompt-box">${esc(m.prompt || '')}</div>
+      ${m.error ? `<div class="prompt-box" style="color:var(--err)">${esc(m.error)}</div>` : ''}
+    </div>`;
+}
+
+async function pollEvents() {
+  if (!selected) return;
+  const id = selected;
+  try {
+    const data = await (await fetch(`/api/runs/${id}/events?offset=${offset}`)).json();
+    if (id !== selected) return;   // user switched runs mid-request
+    detailMeta = data.meta;
+    renderHead();
+    offset = data.next_offset ?? offset;
+    for (const entry of data.events || []) applyEvent(entry);
+  } catch { /* transient; next tick retries */ }
+}
+
+/* Merge item.started/updated/completed into one node keyed by item id,
+   so a running command updates in place instead of stacking duplicates. */
+function applyEvent(entry) {
+  const ev = entry.e;
+  const t = entry.t;
+  if (!ev) { upsert('raw:' + order.length, render('sys', '原始输出', esc(entry.raw || ''), t)); return; }
+
+  const type = ev.type || '';
+  if (type.startsWith('item.')) {
+    const item = ev.item || {};
+    upsert('item:' + (item.id ?? order.length), renderItem(item, t));
+    return;
+  }
+  const key = 'evt:' + order.length;
+  if (type === 'thread.started') upsert(key, render('sys', '会话开始', `thread_id ${esc(ev.thread_id || '')}`, t));
+  else if (type === 'turn.started') upsert(key, render('sys', '开始处理', '', t));
+  else if (type === 'turn.completed') {
+    const u = ev.usage || {};
+    const text = `输入 ${u.input_tokens ?? 0}（缓存 ${u.cached_input_tokens ?? 0}） · 输出 ${u.output_tokens ?? 0} · 推理 ${u.reasoning_output_tokens ?? 0}`;
+    upsert(key, render('sys', '完成', esc(text), t));
+  }
+  else if (type.includes('fail')) upsert(key, render('err', '失败', esc(ev.error?.message || ''), t));
+  else if (type.includes('error')) {
+    const msg = ev.message || '';
+    // Network reconnect chatter is noise, not a failure — the server ignores it too.
+    const reconnect = /^Reconnecting\.\.\.\s+\d+\/\d+/.test(msg);
+    upsert(key, render(reconnect ? 'sys' : 'err', reconnect ? '重连中' : '错误', esc(msg), t));
+  }
+  else upsert(key, render('sys', esc(type), esc(JSON.stringify(ev).slice(0, 400)), t));
+}
+
+function renderItem(item, t) {
+  const type = item.type || '';
+  if (type === 'agent_message') return render('msg', '回复', esc(item.text || ''), t);
+  if (type === 'reasoning') return render('think', '推理', esc(item.text || item.summary || ''), t);
+  if (type === 'command_execution') {
+    const done = item.status === 'completed';
+    const bad = done && item.exit_code !== 0;
+    const status = done ? `退出码 ${item.exit_code}` : '执行中…';
+    const out = item.aggregated_output ? `<div class="cmd-out code">${esc(item.aggregated_output)}</div>` : '';
+    const html = `<div class="cmd-line code">$ ${esc(item.command || '')}</div>${out}
+      <div class="cmd-status ${bad ? 'bad' : ''}">${esc(status)}</div>`;
+    return render('cmd', '执行命令', html, t);
+  }
+  if (type === 'file_change') {
+    const rows = (item.changes || []).map((c) => `${esc(c.kind || '')} ${esc(c.path || '')}`).join('\n');
+    return render('file', '文件改动', esc(rows) || esc(item.status || ''), t);
+  }
+  if (type === 'mcp_tool_call') return render('cmd', 'MCP 调用', esc(`${item.server || ''}.${item.tool || ''} — ${item.status || ''}`), t);
+  if (type === 'web_search') return render('cmd', '联网搜索', esc(item.query || ''), t);
+  if (type === 'todo_list') {
+    const rows = (item.items || []).map((i) => `${i.completed ? '[x]' : '[ ]'} ${esc(i.text || '')}`).join('\n');
+    return render('sys', '任务清单', rows, t);
+  }
+  if (type === 'error') return render('err', '错误', esc(item.message || ''), t);
+  return render('sys', esc(type || 'item'), esc(JSON.stringify(item).slice(0, 400)), t);
+}
+
+// Callers are responsible for escaping anything they interpolate into bodyHtml.
+function render(kind, label, bodyHtml, t) {
+  const body = bodyHtml ? `<div class="body ${kind}">${bodyHtml}</div>` : '';
+  return `<div class="ev-head"><span class="tag ${kind}">${label}</span><span class="ev-time">${clock(t)}</span></div>${body}`;
+}
+
+function upsert(key, html) {
+  let entry = nodes.get(key);
+  if (!entry) {
+    const el = document.createElement('div');
+    el.className = 'ev';
+    $('timeline').appendChild(el);
+    entry = { el, sig: null };
+    nodes.set(key, entry);
+    order.push(key);
+  }
+  if (entry.sig === html) return;
+  const tl = $('timeline');
+  const atBottom = tl.scrollHeight - tl.scrollTop - tl.clientHeight < 120;
+  entry.el.innerHTML = html;
+  entry.sig = html;
+  if (atBottom) tl.scrollTop = tl.scrollHeight;
+}
+
+/* ---------- loop ---------- */
+$('q').oninput = renderRuns;
+$('only-running').onchange = renderRuns;
+
+pollRuns();
+setInterval(pollRuns, 2000);
+setInterval(pollEvents, 1000);
+// Keep "已运行 x 秒" ticking even when the run list itself is unchanged.
+setInterval(() => { if (runs.some((r) => r.status === 'running')) renderRuns(); }, 1000);
+</script>
+</body>
+</html>

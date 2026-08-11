@@ -34,6 +34,7 @@ Compared to the official Codex MCP implementation, CodexMCP introduces enterpris
 | Reasoning Detail Tracking | × | √ |
 | Parallel Task Support | ×  | √  |
 | Error Handling | ×  | √  |
+| Live Run Monitoring (web dashboard) | ×  | √  |
 
 
 ---
@@ -186,7 +187,44 @@ You **must execute** the following steps:
 
 ---
 
-## III. Tool Documentation
+## III. Live Monitoring Dashboard
+
+While an MCP tool is running, Claude Code shows nothing but `Calling codex...` — you cannot see what Codex is doing. That is a client-side limitation: the MCP protocol has no streaming tool results, and the progress (`notifications/progress`) and logging (`notifications/message`) notifications a server can emit are not rendered by Claude Code today.
+
+CodexMCP therefore streams every run's events to disk as they happen, and ships a standalone web dashboard so you can always see which step a run is on.
+
+![Monitoring dashboard](../images/monitor.png)
+
+### Launch
+
+```bash
+uvx --from git+https://github.com/GuDaStudio/codexmcp codexmcp-monitor
+```
+
+Your browser opens <http://127.0.0.1:8765> automatically. Options:
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--port` | `8765` | Port to listen on |
+| `--host` | `127.0.0.1` | Bind address (local-only by default) |
+| `--no-open` | - | Do not open a browser on start |
+
+### What you get
+
+- **Left pane**: every Codex run, with live ones pinned to the top and highlighted, showing elapsed time and event count; searchable by prompt or directory, with a running-only filter
+- **Right pane**: the selected run's full transcript, refreshed incrementally in real time — Codex's replies and reasoning, every shell command with its output and exit code, file changes, and token usage
+- Click the `SESSION_ID` to copy it for a follow-up turn; the page URL carries `#run_id`, so a specific run can be bookmarked or shared
+
+### Notes
+
+- The dashboard is a **separate process** that only reads recorded files — starting or stopping it never affects an in-flight Codex task
+- Records live in `~/.codexmcp/runs/` (override the root with the `CODEXMCP_HOME` environment variable); each run writes `*.meta.json` (status and parameters) and `*.jsonl` (event stream)
+- The newest 500 runs are kept; older ones are pruned at server startup
+- If recording fails (disk full, no permission), it silently switches off for that run and never affects the `codex` tool's execution or return value
+
+---
+
+## IV. Tool Documentation
 
 <details>
 <summary>Click to view codex tool parameter documentation</summary>
@@ -231,7 +269,7 @@ You **must execute** the following steps:
 
 ---
 
-## IV. FAQ
+## V. FAQ
 
 <details>
 <summary>Q1: Are there any additional fees?</summary>
@@ -244,6 +282,15 @@ You **must execute** the following steps:
 <summary>Q2: Will parallel calls conflict?</summary>
 
 No. Each call uses an independent `SESSION_ID`, ensuring complete isolation.
+
+</details>
+
+<details>
+<summary>Q3: Why can't I see Codex's progress inside Claude Code?</summary>
+
+This is a Claude Code client limitation that CodexMCP cannot work around: the MCP protocol requires a tool to return its result in one piece and has no streaming results, and while a server can emit progress (`notifications/progress`) and logging (`notifications/message`) notifications, Claude Code does not render either today. That is why you only ever see `Calling codex...` while the tool runs.
+
+Use the [live monitoring dashboard](#iii-live-monitoring-dashboard) instead: `codexmcp-monitor` shows each run's full progress in real time in a separate browser tab.
 
 </details>
 

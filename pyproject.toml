@@ -29,6 +29,7 @@ Homepage = "https://github.com/GuDaStudio/codexmcp"
 
 [project.scripts]
 codexmcp = "codexmcp.cli:main"
+codexmcp-monitor = "codexmcp.monitor:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/codexmcp"]
